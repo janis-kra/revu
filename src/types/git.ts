@@ -49,3 +49,19 @@ export interface RepositoryStatus {
   stagedCount: number;
   unstagedCount: number;
 }
+
+export type ReviewMode = "working" | "branch";
+
+export interface BranchInfo {
+  name: string;
+  isHead: boolean;
+  isRemote: boolean;
+}
+
+export interface BranchDiffStatus {
+  baseBranch: string;
+  headBranch?: string;
+  files: FileEntry[];
+  aheadCount: number;
+  behindCount: number;
+}

@@ -529,6 +529,182 @@ impl GitRepository {
 
         Ok(())
     }
+
+    /// List local and remote branches.
+    pub fn list_branches(&self) -> Result<Vec<BranchInfo>, AppError> {
+        let head_name = self
+            .repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(String::from));
+
+        let mut branches = Vec::new();
+        let iter = self.repo.branches(None)?;
+
+        for item in iter {
+            let (branch, branch_type) = item?;
+            let Some(name) = branch.name()? else {
+                continue;
+            };
+            let is_remote = branch_type == git2::BranchType::Remote;
+            let is_head = head_name.as_deref() == Some(name);
+            branches.push(BranchInfo {
+                name: name.to_string(),
+                is_head,
+                is_remote,
+            });
+        }
+
+        branches.sort_by(|a, b| {
+            // Local first, then by name
+            a.is_remote
+                .cmp(&b.is_remote)
+                .then_with(|| a.name.cmp(&b.name))
+        });
+
+        Ok(branches)
+    }
+
+    /// Three-dot branch diff status: merge-base(base, HEAD) → HEAD.
+    /// This matches what a PR would introduce when merging HEAD into base.
+    pub fn get_branch_diff_status(&self, base_branch: &str) -> Result<BranchDiffStatus, AppError> {
+        let head_branch = self
+            .repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(String::from));
+
+        let (base_commit, head_commit, base_tree, head_tree) =
+            self.resolve_branch_diff_trees(base_branch)?;
+
+        let mut diff_opts = DiffOptions::new();
+        diff_opts.context_lines(0);
+
+        let mut diff =
+            self.repo
+                .diff_tree_to_tree(Some(&base_tree), Some(&head_tree), Some(&mut diff_opts))?;
+        // Detect renames/copies like `git diff --find-renames`
+        diff.find_similar(None)?;
+
+        let mut files = Vec::new();
+        for delta in diff.deltas() {
+            let path = delta
+                .new_file()
+                .path()
+                .or_else(|| delta.old_file().path())
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            if path.is_empty() {
+                continue;
+            }
+
+            let status = match delta.status() {
+                Delta::Added => FileStatus::Added,
+                Delta::Deleted => FileStatus::Deleted,
+                Delta::Modified => FileStatus::Modified,
+                Delta::Renamed => FileStatus::Renamed,
+                Delta::Copied => FileStatus::Copied,
+                _ => FileStatus::Modified,
+            };
+
+            let old_path = if matches!(delta.status(), Delta::Renamed | Delta::Copied) {
+                delta
+                    .old_file()
+                    .path()
+                    .map(|p| p.to_string_lossy().to_string())
+            } else {
+                None
+            };
+
+            files.push(FileEntry {
+                path,
+                status,
+                staged: false,
+                old_path,
+            });
+        }
+
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+
+        let (ahead_count, behind_count) = self
+            .repo
+            .graph_ahead_behind(head_commit.id(), base_commit.id())
+            .unwrap_or((0, 0));
+
+        Ok(BranchDiffStatus {
+            base_branch: base_branch.to_string(),
+            head_branch,
+            files,
+            ahead_count,
+            behind_count,
+        })
+    }
+
+    /// File-level three-dot diff against a base branch.
+    pub fn get_branch_file_diff(
+        &self,
+        base_branch: &str,
+        file_path: &str,
+        old_path: Option<&str>,
+        context_lines: u32,
+        ignore_whitespace: bool,
+    ) -> Result<FileDiff, AppError> {
+        let (_, _, base_tree, head_tree) = self.resolve_branch_diff_trees(base_branch)?;
+
+        let mut diff_opts = DiffOptions::new();
+        diff_opts.pathspec(file_path);
+        if let Some(old) = old_path {
+            if old != file_path {
+                diff_opts.pathspec(old);
+            }
+        }
+        diff_opts.context_lines(context_lines);
+        if ignore_whitespace {
+            diff_opts.ignore_whitespace(true);
+        }
+
+        let mut diff =
+            self.repo
+                .diff_tree_to_tree(Some(&base_tree), Some(&head_tree), Some(&mut diff_opts))?;
+        // With both old and new paths, find_similar can collapse delete+add into a rename
+        diff.find_similar(None)?;
+
+        self.parse_diff(&diff, file_path)
+    }
+
+    /// Resolve three-dot trees: merge-base(base, HEAD) and HEAD.
+    fn resolve_branch_diff_trees(
+        &self,
+        base_branch: &str,
+    ) -> Result<(git2::Commit<'_>, git2::Commit<'_>, git2::Tree<'_>, git2::Tree<'_>), AppError>
+    {
+        let base_obj = self.repo.revparse_single(base_branch).map_err(|_| {
+            AppError::Custom(format!("Branch not found: {}", base_branch))
+        })?;
+        let base_commit = base_obj.peel_to_commit()?;
+
+        let head_commit = self
+            .repo
+            .head()
+            .map_err(|_| AppError::Custom("HEAD not found".to_string()))?
+            .peel_to_commit()?;
+
+        let merge_base_oid = self
+            .repo
+            .merge_base(base_commit.id(), head_commit.id())
+            .map_err(|_| {
+                AppError::Custom(format!(
+                    "No common ancestor between '{}' and HEAD",
+                    base_branch
+                ))
+            })?;
+
+        let base_tree = self.repo.find_commit(merge_base_oid)?.tree()?;
+        let head_tree = head_commit.tree()?;
+
+        Ok((base_commit, head_commit, base_tree, head_tree))
+    }
 }
 
 fn detect_language(path: &str) -> Option<String> {

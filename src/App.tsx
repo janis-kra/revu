@@ -12,8 +12,16 @@ import { CommitPanel } from "@/features/commit";
 import { Button } from "@/components/ui";
 
 export default function App() {
-  const { repoPath, status, setRepoPath, refreshStatus, initDemoMode, isDemo } =
-    useGitStore();
+  const {
+    repoPath,
+    status,
+    setRepoPath,
+    refreshStatus,
+    initDemoMode,
+    isDemo,
+    reviewMode,
+    baseBranch,
+  } = useGitStore();
   const {
     draft,
     exportToMarkdown,
@@ -169,6 +177,16 @@ export default function App() {
                       <span className="text-gray-600 dark:text-gray-400">
                         {status.branch}
                       </span>
+                      {reviewMode === "branch" && baseBranch && (
+                        <>
+                          <span className="text-gray-400 dark:text-gray-500">
+                            →
+                          </span>
+                          <span className="text-blue-600 dark:text-blue-400">
+                            {baseBranch}
+                          </span>
+                        </>
+                      )}
                     </>
                   )}
                 </>

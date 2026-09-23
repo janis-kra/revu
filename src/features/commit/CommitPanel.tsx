@@ -3,10 +3,42 @@ import { useGitStore } from "@/stores/gitStore";
 import { Button } from "@/components/ui";
 
 export function CommitPanel() {
-  const { status, commit, isLoading, error, clearError } = useGitStore();
+  const { status, commit, isLoading, error, clearError, reviewMode, branchStatus, baseBranch } =
+    useGitStore();
   const [message, setMessage] = useState("");
   const [commitError, setCommitError] = useState<string | null>(null);
   const [commitSuccess, setCommitSuccess] = useState<string | null>(null);
+
+  // Branch review is read-only — show summary instead of commit UI
+  if (reviewMode === "branch") {
+    const fileCount = branchStatus?.files.length ?? 0;
+    const head = branchStatus?.headBranch ?? "HEAD";
+    return (
+      <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3">
+        <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+          <p className="font-medium text-gray-800 dark:text-gray-200">
+            Branch review
+          </p>
+          <p>
+            <span className="font-mono text-gray-800 dark:text-gray-200">{head}</span>
+            {" → "}
+            <span className="font-mono text-gray-800 dark:text-gray-200">
+              {baseBranch ?? "…"}
+            </span>
+          </p>
+          <p>
+            {fileCount} file{fileCount !== 1 ? "s" : ""} changed
+            {branchStatus && branchStatus.aheadCount > 0
+              ? ` · ${branchStatus.aheadCount} commit${branchStatus.aheadCount !== 1 ? "s" : ""}`
+              : ""}
+          </p>
+          <p className="text-gray-500 dark:text-gray-500 pt-1">
+            Comment on PR-bound changes, then export for your agent.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const stagedCount = status?.stagedCount ?? 0;
   const canCommit = stagedCount > 0 && message.trim().length > 0;

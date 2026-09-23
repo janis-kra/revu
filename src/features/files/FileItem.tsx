@@ -6,8 +6,9 @@ interface FileItemProps {
   file: FileEntry;
   isSelected: boolean;
   onSelect: () => void;
-  onStageToggle: () => void;
+  onStageToggle?: () => void;
   commentCount: number;
+  showStageCheckbox?: boolean;
 }
 
 const statusConfig: Record<FileStatus, { label: string; color: string }> = {
@@ -27,6 +28,7 @@ export function FileItem({
   onSelect,
   onStageToggle,
   commentCount,
+  showStageCheckbox = true,
 }: FileItemProps) {
   const { label, color } = statusConfig[file.status];
   const fileName = file.path.split("/").pop() || file.path;
@@ -43,14 +45,16 @@ export function FileItem({
       )}
       onClick={onSelect}
     >
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          onStageToggle();
-        }}
-      >
-        <Checkbox checked={file.staged} onChange={() => {}} />
-      </div>
+      {showStageCheckbox && onStageToggle && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onStageToggle();
+          }}
+        >
+          <Checkbox checked={file.staged} onChange={() => {}} />
+        </div>
+      )}
 
       <span
         className={clsx("font-mono text-xs font-bold w-4 text-center", color)}

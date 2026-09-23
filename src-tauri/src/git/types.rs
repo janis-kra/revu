@@ -71,3 +71,21 @@ pub struct RepositoryStatus {
     pub staged_count: usize,
     pub unstaged_count: usize,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchInfo {
+    pub name: String,
+    pub is_head: bool,
+    pub is_remote: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchDiffStatus {
+    pub base_branch: String,
+    pub head_branch: Option<String>,
+    pub files: Vec<FileEntry>,
+    pub ahead_count: usize,
+    pub behind_count: usize,
+}

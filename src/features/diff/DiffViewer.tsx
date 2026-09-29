@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useGitStore } from "@/stores/gitStore";
 import { useCommentStore } from "@/stores/commentStore";
 import { useUiStore } from "@/stores/uiStore";
+import { CopiedTooltip } from "@/components/ui";
+import { useCopiedFeedback } from "@/hooks/useCopiedFeedback";
 import { UnifiedDiffView } from "./UnifiedDiffView";
 import { SplitDiffView } from "./SplitDiffView";
 import type { Comment } from "@/types/comment";
@@ -25,8 +28,19 @@ export function DiffViewer() {
     isOld: boolean;
   } | null>(null);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
+  const { copied: pathCopied, trigger: triggerPathCopied } = useCopiedFeedback();
 
   const comments = currentDiff ? getFileComments(currentDiff.path) : [];
+
+  const handleCopyPath = useCallback(async () => {
+    if (!currentDiff) return;
+    try {
+      await writeText(currentDiff.path);
+      triggerPathCopied();
+    } catch (err) {
+      console.error("Failed to copy file path:", err);
+    }
+  }, [currentDiff, triggerPathCopied]);
 
   useEffect(() => {
     if (selectedFile) {
@@ -131,12 +145,60 @@ export function DiffViewer() {
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate"
+            title={currentDiff.path}
+          >
             {currentDiff.path}
           </span>
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyPath}
+              className="p-1 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Copy file path"
+              title="Copy file path"
+            >
+              {pathCopied ? (
+                <svg
+                  className="w-3.5 h-3.5 text-green-600 dark:text-green-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              )}
+            </button>
+            <CopiedTooltip
+              show={pathCopied}
+              className="absolute left-1/2 top-full mt-1 -translate-x-1/2"
+            />
+          </div>
           {currentDiff.oldPath && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
               (renamed from {currentDiff.oldPath})
             </span>
           )}

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Branch review mode: compare the current branch against a selectable base branch (three-dot / merge-base diff, same shape as a PR)
 - Branch picker for local and remote bases, with ahead/behind summary
+- Copy button next to the file path in the diff header (relative path to repo root)
 
 ## [0.4.0] - 2026-02-07
 

@@ -35,6 +35,26 @@ export function CommentPopover() {
     }
   }, [draft]);
 
+  const handleCancel = React.useCallback(() => {
+    setDraft(null);
+    setContent("");
+    setCategory("suggestion");
+  }, [setDraft]);
+
+  React.useEffect(() => {
+    if (!draft) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [draft, handleCancel]);
+
   if (!draft) return null;
 
   const handleSubmit = () => {
@@ -56,12 +76,6 @@ export function CommentPopover() {
         draft.isOld,
       );
     }
-    setContent("");
-    setCategory("suggestion");
-  };
-
-  const handleCancel = () => {
-    setDraft(null);
     setContent("");
     setCategory("suggestion");
   };

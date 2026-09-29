@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useGitStore } from "@/stores/gitStore";
 import { useCommentStore } from "@/stores/commentStore";
 import { useUiStore } from "@/stores/uiStore";
@@ -9,7 +10,8 @@ import { FileList } from "@/features/files";
 import { DiffViewer } from "@/features/diff";
 import { CommentPopover, CommentList } from "@/features/comments";
 import { CommitPanel } from "@/features/commit";
-import { Button } from "@/components/ui";
+import { Button, CopiedTooltip } from "@/components/ui";
+import { useCopiedFeedback } from "@/hooks/useCopiedFeedback";
 
 export default function App() {
   const {
@@ -35,7 +37,10 @@ export default function App() {
     setShowCommentsPanel,
     setTheme,
     sidebarWidth,
+    triggerCopyFeedback,
   } = useUiStore();
+  const { copied: shortcutCopied, trigger: triggerShortcutCopied } =
+    useCopiedFeedback();
 
   // Initialize demo mode on mount (only in development)
   useEffect(() => {
@@ -98,7 +103,15 @@ export default function App() {
         e.preventDefault();
         const markdown = exportToMarkdown();
         if (markdown) {
-          navigator.clipboard.writeText(markdown);
+          void writeText(markdown)
+            .then(() => {
+              triggerCopyFeedback();
+              // Always show app-level feedback so shortcut works with panel closed
+              triggerShortcutCopied();
+            })
+            .catch((err) => {
+              console.error("Failed to copy review markdown:", err);
+            });
         }
       }
 
@@ -110,7 +123,12 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [exportToMarkdown, refreshStatus]);
+  }, [
+    exportToMarkdown,
+    refreshStatus,
+    triggerCopyFeedback,
+    triggerShortcutCopied,
+  ]);
 
   // Auto-open comments panel when first comment is added
   const comments = getAllComments();
@@ -146,7 +164,7 @@ export default function App() {
         {/* Header / Titlebar */}
         <header
           data-tauri-drag-region
-          className="flex-shrink-0 flex items-center justify-end pl-20 pr-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+          className="relative flex-shrink-0 flex items-center justify-end pl-20 pr-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
         >
           <div className="flex items-center gap-2">
             <button
@@ -238,6 +256,10 @@ export default function App() {
             </Button>
             <ThemeToggle />
           </div>
+          <CopiedTooltip
+            show={shortcutCopied}
+            className="absolute left-1/2 top-full mt-1 -translate-x-1/2"
+          />
         </header>
 
         {/* Main content */}

@@ -5,7 +5,8 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCommentStore } from "@/stores/commentStore";
 import { useGitStore } from "@/stores/gitStore";
 import { useUiStore } from "@/stores/uiStore";
-import { Button } from "@/components/ui";
+import { Button, CopiedTooltip } from "@/components/ui";
+import { useCopiedFeedback } from "@/hooks/useCopiedFeedback";
 import { HighlightedContent } from "@/features/diff/HighlightedContent";
 import { getLanguageFromPath } from "@/lib/syntax";
 import { stripIndent } from "@/lib/stripIndent";
@@ -46,11 +47,26 @@ export function CommentList() {
     setDraft,
   } = useCommentStore();
   const { repoPath, status, selectFile } = useGitStore();
-  const { setScrollToLine } = useUiStore();
+  const { setScrollToLine, copyFeedbackKey } = useUiStore();
   const comments = getAllComments();
-  const [exportStatus, setExportStatus] = useState<
-    "idle" | "exporting" | "exported"
-  >("idle");
+  const [exportStatus, setExportStatus] = useState<"idle" | "exporting">(
+    "idle",
+  );
+  const { copied: markdownCopied, trigger: triggerMarkdownCopied } =
+    useCopiedFeedback();
+  const { copied: exportCopied, trigger: triggerExportCopied } =
+    useCopiedFeedback();
+  const prevCopyFeedbackKey = useRef(copyFeedbackKey);
+
+  // Keyboard shortcut (Cmd/Ctrl+Shift+C) signals via uiStore
+  useEffect(() => {
+    if (copyFeedbackKey !== prevCopyFeedbackKey.current) {
+      prevCopyFeedbackKey.current = copyFeedbackKey;
+      if (copyFeedbackKey > 0) {
+        triggerMarkdownCopied();
+      }
+    }
+  }, [copyFeedbackKey, triggerMarkdownCopied]);
 
   const handleNavigate = (comment: Comment) => {
     // Find the file in status and select it
@@ -64,8 +80,12 @@ export function CommentList() {
 
   const handleCopyMarkdown = async () => {
     const markdown = exportToMarkdown();
-    if (markdown) {
-      await navigator.clipboard.writeText(markdown);
+    if (!markdown) return;
+    try {
+      await writeText(markdown);
+      triggerMarkdownCopied();
+    } catch (err) {
+      console.error("Failed to copy review markdown:", err);
     }
   };
 
@@ -80,10 +100,10 @@ export function CommentList() {
         markdown,
       });
       await writeText(outputPath);
-      setExportStatus("exported");
-      setTimeout(() => setExportStatus("idle"), 2000);
+      triggerExportCopied();
     } catch (err) {
       console.error("Failed to export review:", err);
+    } finally {
       setExportStatus("idle");
     }
   };
@@ -107,27 +127,35 @@ export function CommentList() {
             {comments.length} Comment{comments.length !== 1 && "s"}
           </span>
           <div className="flex gap-1">
-            <Button variant="ghost" size="sm" onClick={handleCopyMarkdown}>
-              Copy
-            </Button>
+            <div className="relative">
+              <Button variant="ghost" size="sm" onClick={handleCopyMarkdown}>
+                Copy
+              </Button>
+              <CopiedTooltip
+                show={markdownCopied}
+                className="absolute left-1/2 top-full mt-1 -translate-x-1/2"
+              />
+            </div>
             <Button variant="ghost" size="sm" onClick={clearAllComments}>
               Clear
             </Button>
           </div>
         </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleExportForAgent}
-          disabled={exportStatus !== "idle"}
-          className="w-full"
-        >
-          {exportStatus === "exporting"
-            ? "Exporting..."
-            : exportStatus === "exported"
-              ? "Exported! Path copied"
-              : "Export for Agent"}
-        </Button>
+        <div className="relative">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleExportForAgent}
+            disabled={exportStatus !== "idle"}
+            className="w-full"
+          >
+            {exportStatus === "exporting" ? "Exporting..." : "Export for Agent"}
+          </Button>
+          <CopiedTooltip
+            show={exportCopied}
+            className="absolute left-1/2 top-full mt-1 -translate-x-1/2"
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-3">

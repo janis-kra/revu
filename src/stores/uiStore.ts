@@ -17,6 +17,8 @@ interface UiState {
   showFullFileContext: boolean;
   ignoreWhitespace: boolean;
   scrollToLine: ScrollToLine | null;
+  /** Incremented to signal a successful copy (e.g. keyboard shortcut). */
+  copyFeedbackKey: number;
 
   setDiffViewMode: (mode: DiffViewMode) => void;
   setTheme: (theme: Theme) => void;
@@ -26,6 +28,7 @@ interface UiState {
   setShowFullFileContext: (show: boolean) => void;
   setIgnoreWhitespace: (ignore: boolean) => void;
   setScrollToLine: (target: ScrollToLine | null) => void;
+  triggerCopyFeedback: () => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -38,6 +41,7 @@ export const useUiStore = create<UiState>()(
       showFullFileContext: false,
       ignoreWhitespace: false,
       scrollToLine: null,
+      copyFeedbackKey: 0,
 
       setDiffViewMode: (mode) => set({ diffViewMode: mode }),
       setTheme: (theme) => set({ theme }),
@@ -49,6 +53,8 @@ export const useUiStore = create<UiState>()(
       setShowFullFileContext: (show) => set({ showFullFileContext: show }),
       setIgnoreWhitespace: (ignore) => set({ ignoreWhitespace: ignore }),
       setScrollToLine: (target) => set({ scrollToLine: target }),
+      triggerCopyFeedback: () =>
+        set((state) => ({ copyFeedbackKey: state.copyFeedbackKey + 1 })),
     }),
     {
       name: "revu-ui",
